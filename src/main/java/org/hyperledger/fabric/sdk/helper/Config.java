@@ -70,6 +70,7 @@ public class Config {
     public static final String ASYMMETRIC_KEY_TYPE = "org.hyperledger.fabric.sdk.crypto.asymmetric_key_type";
     public static final String CERTIFICATE_FORMAT = "org.hyperledger.fabric.sdk.crypto.certificate_format";
     public static final String SIGNATURE_ALGORITHM = "org.hyperledger.fabric.sdk.crypto.default_signature_algorithm";
+    public static final String SIGNATURE_USERID = "org.hyperledger.fabric.sdk.crypto.default_signature_userid";
     /**
      * Logging settings
      **/
@@ -154,12 +155,13 @@ public class Config {
             defaultProperty(DEFAULT_CRYPTO_SUITE_FACTORY, "org.hyperledger.fabric.sdk.security.HLSDKJCryptoSuiteFactory");
             defaultProperty(SECURITY_LEVEL, "256");
             defaultProperty(SECURITY_PROVIDER_CLASS_NAME, BouncyCastleProvider.class.getName());
-            defaultProperty(SECURITY_CURVE_MAPPING, "256=secp256r1:384=secp384r1");
+            defaultProperty(SECURITY_CURVE_MAPPING, "256=secp256r1:384=secp384r1:sm256=sm2p256v1");
             defaultProperty(HASH_ALGORITHM, "SHA2");
             defaultProperty(ASYMMETRIC_KEY_TYPE, "EC");
 
             defaultProperty(CERTIFICATE_FORMAT, "X.509");
             defaultProperty(SIGNATURE_ALGORITHM, "SHA256withECDSA");
+            defaultProperty(SIGNATURE_USERID, "1234567812345678");
 
             /**
              * Connection defaults
@@ -351,13 +353,13 @@ public class Config {
 
         if (curveMapping == null) {
 
-            curveMapping = parseSecurityCurveMappings(getProperty(SECURITY_CURVE_MAPPING));
+            curveMapping = parseSecurityCurveMappings(getProperty(HASH_ALGORITHM), getProperty(SECURITY_CURVE_MAPPING));
         }
 
         return Collections.unmodifiableMap(curveMapping);
     }
 
-    public static Map<Integer, String> parseSecurityCurveMappings(final String property) {
+    public static Map<Integer, String> parseSecurityCurveMappings(final String hashAlgo, final String property) {
         Map<Integer, String> lcurveMapping = new HashMap<>(8);
 
         if (property != null && !property.isEmpty()) { //empty will be caught later.
@@ -372,8 +374,21 @@ public class Config {
                 }
 
                 try {
-                    int parseInt = Integer.parseInt(ep[0]);
-                    lcurveMapping.put(parseInt, ep[1]);
+                    if ("SM3".equals(hashAlgo)) {
+                        if (ep[0].startsWith("sm")) {
+                            int parseInt = Integer.parseInt(ep[0].substring(2));
+                            lcurveMapping.put(parseInt, ep[1]);
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        if (ep[0].startsWith("sm")) {
+                            continue;
+                        } else {
+                            int parseInt = Integer.parseInt(ep[0]);
+                            lcurveMapping.put(parseInt, ep[1]);
+                        }
+                    }
                 } catch (NumberFormatException e) {
                     logger.warn(format("Bad curve mapping. Integer needed for strength %s for %s in property %s",
                             ep[0], mape, SECURITY_CURVE_MAPPING));
@@ -492,6 +507,10 @@ public class Config {
 
     public String getSignatureAlgorithm() {
         return getProperty(SIGNATURE_ALGORITHM);
+    }
+
+    public String getSignatureUserID() {
+        return getProperty(SIGNATURE_USERID);
     }
 
     public String getDefaultCryptoSuiteFactory() {

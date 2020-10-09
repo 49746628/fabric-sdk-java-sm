@@ -17,6 +17,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
+import java.security.spec.InvalidKeySpecException;
 import java.util.Collection;
 import java.util.Properties;
 
@@ -113,6 +114,16 @@ public interface CryptoSuite {
      * @throws CryptoException
      */
     Certificate bytesToCertificate(byte[] certBytes) throws CryptoException;
+
+
+    /**
+     * Convert bytes in PEM format to PrivateKey.
+     *
+     * @param pemKey
+     * @return PrivateKey
+     * @throws CryptoException
+     */
+    PrivateKey bytesToPrivateKey(byte[] pemKey) throws CryptoException, InvalidKeySpecException;
 
     /**
      * The CryptoSuite factory. Currently {@link #getCryptoSuite} will always

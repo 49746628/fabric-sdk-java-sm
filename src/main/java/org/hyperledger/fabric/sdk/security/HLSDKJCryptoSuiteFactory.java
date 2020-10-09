@@ -44,6 +44,16 @@ public class HLSDKJCryptoSuiteFactory implements CryptoSuiteFactory {
         CryptoSuite ret = cache.get(properties);
         if (ret == null) {
             try {
+                String hashAlg = properties.getProperty(Config.HASH_ALGORITHM);
+                if ("SM3".equals(hashAlg)) {
+                    if ("256".equals(properties.getProperty(Config.SECURITY_LEVEL))) {
+                        properties.setProperty(Config.SIGNATURE_ALGORITHM, "SM3withSM2");
+                    } else {
+                        properties.setProperty(Config.SIGNATURE_ALGORITHM, "SHA256withSM2");
+                    }
+                    properties.setProperty(Config.SECURITY_CURVE_MAPPING, "256=secp256r1:384=secp384r1:sm256=sm2p256v1");
+                }
+
                 CryptoPrimitives cp = new CryptoPrimitives();
                 cp.setProperties(properties);
                 cp.init();

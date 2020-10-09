@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -31,6 +32,7 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Provider;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Security;
 import java.security.Signature;
@@ -74,6 +76,9 @@ import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SHA3Digest;
+import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPrivateKey;
+import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey;
+import org.bouncycastle.jcajce.spec.SM2ParameterSpec;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
@@ -85,6 +90,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
 import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
+import org.bouncycastle.util.encoders.Hex;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemReader;
 import org.hyperledger.fabric.sdk.exception.CryptoException;
@@ -127,6 +133,11 @@ public class CryptoPrimitives implements CryptoSuite {
         String securityProviderClassName = config.getSecurityProviderClassName();
 
         SECURITY_PROVIDER = setUpExplicitProvider(securityProviderClassName);
+        if (this.SECURITY_PROVIDER == null) {
+            throw new InstantiationException("SECURITY_PROVIDER is null");
+        } else {
+            Security.addProvider(this.SECURITY_PROVIDER);
+        }
 
         //Decided TO NOT do this as it can have affects over the whole JVM and could have
         // unexpected results.  The embedding application can easily do this!
@@ -178,6 +189,7 @@ public class CryptoPrimitives implements CryptoSuite {
 //        return this.DEFAULT_SIGNATURE_ALGORITHM;
 //    }
 
+    @Override
     public Certificate bytesToCertificate(byte[] certBytes) throws CryptoException {
         if (certBytes == null || certBytes.length == 0) {
             throw new CryptoException("bytesToCertificate: input null or zero length");
@@ -270,6 +282,7 @@ public class CryptoPrimitives implements CryptoSuite {
      * @param pemKey pem-encoded private key
      * @return
      */
+    @Override
     public PrivateKey bytesToPrivateKey(byte[] pemKey) throws CryptoException {
         PrivateKey pk = null;
         CryptoException ce = null;
@@ -323,7 +336,12 @@ public class CryptoPrimitives implements CryptoSuite {
                 isVerified = validateCertificate(certificate);
                 if (isVerified) { // only proceed if cert is trusted
 
-                    Signature sig = Signature.getInstance(signatureAlgorithm);
+                    Signature sig = Signature.getInstance(signatureAlgorithm, SECURITY_PROVIDER);
+                    if (signatureAlgorithm.contains("SM2")) {
+                        byte[] userId = config.getSignatureUserID().getBytes("UTF-8");
+                        SM2ParameterSpec parameterSpec = new SM2ParameterSpec(userId);
+                        sig.setParameter(parameterSpec);
+                    }
                     sig.initVerify(certificate);
                     sig.update(plainText);
                     isVerified = sig.verify(signature);
@@ -335,7 +353,40 @@ public class CryptoPrimitives implements CryptoSuite {
                     + DatatypeConverter.printHexBinary(pemCertificate), e);
             logger.error(ex.getMessage(), ex);
             throw ex;
-        } catch (NoSuchAlgorithmException | SignatureException e) {
+        } catch (NoSuchAlgorithmException | SignatureException | UnsupportedEncodingException | InvalidAlgorithmParameterException e) {
+            CryptoException ex = new CryptoException("Cannot verify. Signature algorithm is invalid. Error is: " + e.getMessage(), e);
+            logger.error(ex.getMessage(), ex);
+            throw ex;
+        }
+
+        return isVerified;
+    } // verify
+
+
+    public boolean verify(PublicKey pubKey, byte[] signature, byte[] plainText) throws CryptoException {
+        boolean isVerified = false;
+
+        if (plainText == null || signature == null) {
+            return false;
+        }
+
+        try {
+                Signature sig = Signature.getInstance(DEFAULT_SIGNATURE_ALGORITHM, SECURITY_PROVIDER);
+                if (DEFAULT_SIGNATURE_ALGORITHM.contains("SM2")) {
+                    byte[] userId = config.getSignatureUserID().getBytes("UTF-8");
+                    SM2ParameterSpec parameterSpec = new SM2ParameterSpec(userId);
+                    sig.setParameter(parameterSpec);
+                }
+                sig.initVerify(pubKey);
+                sig.update(plainText);
+                isVerified = sig.verify(signature);
+        } catch (InvalidKeyException e) {
+            CryptoException ex = new CryptoException("Cannot verify signature. Error is: "
+                    + e.getMessage() + "\r\nCertificate: "
+                    + "", e);
+            logger.error(ex.getMessage(), ex);
+            throw ex;
+        } catch (NoSuchAlgorithmException | SignatureException | UnsupportedEncodingException | InvalidAlgorithmParameterException e) {
             CryptoException ex = new CryptoException("Cannot verify. Signature algorithm is invalid. Error is: " + e.getMessage(), e);
             logger.error(ex.getMessage(), ex);
             throw ex;
@@ -570,11 +621,11 @@ public class CryptoPrimitives implements CryptoSuite {
             PKIXParameters parms = new PKIXParameters(keyStore);
             parms.setRevocationEnabled(false);
 
-            CertPathValidator certValidator = CertPathValidator.getInstance(CertPathValidator.getDefaultType()); // PKIX
+            CertPathValidator certValidator = CertPathValidator.getInstance(CertPathValidator.getDefaultType(), SECURITY_PROVIDER); // PKIX
 
             ArrayList<Certificate> start = new ArrayList<>();
             start.add(cert);
-            CertificateFactory certFactory = CertificateFactory.getInstance(CERTIFICATE_FORMAT);
+            CertificateFactory certFactory = CertificateFactory.getInstance(CERTIFICATE_FORMAT, SECURITY_PROVIDER);
             CertPath certPath = certFactory.generateCertPath(start);
 
             certValidator.validate(certPath, parms);
@@ -636,9 +687,9 @@ public class CryptoPrimitives implements CryptoSuite {
 
     void setHashAlgorithm(String algorithm) throws InvalidArgumentException {
         if (isNullOrEmpty(algorithm)
-                || !("SHA2".equals(algorithm) || "SHA3".equals(algorithm))) {
+                || !("SHA2".equals(algorithm) || "SHA3".equals(algorithm) || "SM3".equals(algorithm))) {
             throw new InvalidArgumentException("Illegal Hash function family: "
-                    + algorithm + " - must be either SHA2 or SHA3");
+                    + algorithm + " - must be either SHA2 or SHA3 or SM3");
         }
 
         hashAlgorithm = algorithm;
@@ -750,11 +801,48 @@ public class CryptoPrimitives implements CryptoSuite {
     }
 
     /**
+     * Sign data with the specified elliptic curve private key.
+     *
+     * @param privateKey elliptic curve private key.
+     * @param data       data to sign
+     * @return the signed data.
+     * @throws CryptoException
+     */
+    private byte[] sm2SignToBytes(ECPrivateKey privateKey, byte[] data) throws CryptoException {
+        if (data == null) {
+            throw new CryptoException("Data that to be signed is null.");
+        }
+        if (data.length == 0) {
+            throw new CryptoException("Data to be signed was empty.");
+        }
+
+        try {
+            Signature sig = SECURITY_PROVIDER == null ? Signature.getInstance(DEFAULT_SIGNATURE_ALGORITHM) :
+                    Signature.getInstance(DEFAULT_SIGNATURE_ALGORITHM, SECURITY_PROVIDER);
+            byte[] userId = config.getSignatureUserID().getBytes("UTF-8");
+            SM2ParameterSpec parameterSpec = new SM2ParameterSpec(userId);
+            sig.setParameter(parameterSpec);
+
+            sig.initSign(privateKey);
+            sig.update(data);
+            byte[] signature = sig.sign();
+
+            return signature;
+        } catch (Exception e) {
+            throw new CryptoException("Could not sign the message using private key", e);
+        }
+    }
+
+    /**
      * @throws ClassCastException if the supplied private key is not of type {@link ECPrivateKey}.
      */
     @Override
     public byte[] sign(PrivateKey key, byte[] data) throws CryptoException {
-        return ecdsaSignToBytes((ECPrivateKey) key, data);
+        if (DEFAULT_SIGNATURE_ALGORITHM.contains("SM2")) {
+            return sm2SignToBytes((ECPrivateKey) key, data);
+        } else {
+            return ecdsaSignToBytes((ECPrivateKey) key, data);
+        }
     }
 
     private BigInteger[] preventMalleability(BigInteger[] sigs, BigInteger curveN) {
@@ -779,6 +867,7 @@ public class CryptoPrimitives implements CryptoSuite {
      * @throws OperatorCreationException
      */
 
+    @Override
     public String generateCertificationRequest(String subject, KeyPair pair)
             throws InvalidArgumentException {
 
@@ -911,7 +1000,7 @@ public class CryptoPrimitives implements CryptoSuite {
         setHashAlgorithm(hashAlgorithm);
 
         try {
-            cf = CertificateFactory.getInstance(CERTIFICATE_FORMAT);
+            cf = CertificateFactory.getInstance(CERTIFICATE_FORMAT, SECURITY_PROVIDER);
         } catch (CertificateException e) {
             CryptoException ex = new CryptoException("Cannot initialize " + CERTIFICATE_FORMAT + " certificate factory. Error = " + e.getMessage(), e);
             logger.error(ex.getMessage(), ex);
@@ -932,7 +1021,7 @@ public class CryptoPrimitives implements CryptoSuite {
         String secLevel = Optional.ofNullable(properties.getProperty(Config.SECURITY_LEVEL)).orElse(Integer.toString(securityLevel));
         securityLevel = Integer.parseInt(secLevel);
         if (properties.containsKey(Config.SECURITY_CURVE_MAPPING)) {
-            securityCurveMapping = Config.parseSecurityCurveMappings(properties.getProperty(Config.SECURITY_CURVE_MAPPING));
+            securityCurveMapping = Config.parseSecurityCurveMappings(hashAlgorithm, properties.getProperty(Config.SECURITY_CURVE_MAPPING));
         } else {
             securityCurveMapping = config.getSecurityCurveMapping();
         }

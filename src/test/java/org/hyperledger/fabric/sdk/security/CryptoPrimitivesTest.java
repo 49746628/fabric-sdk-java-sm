@@ -39,6 +39,13 @@ import java.util.Properties;
 import javax.xml.bind.DatatypeConverter;
 
 import org.apache.commons.compress.utils.IOUtils;
+import org.bouncycastle.asn1.x500.RDN;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.asn1.x500.style.IETFUtils;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
+import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPrivateKey;
+import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.util.encoders.Hex;
@@ -84,6 +91,31 @@ public class CryptoPrimitivesTest {
     public static final String PEM_CERT_HEX = "2D2D2D2D2D424547494E2043455254494649434154452D2D2D2D2D0A4D4949434E6A43434164796741774942416749515251692F672B4D79355468732F677536725A494B5844414B42676771686B6A4F50515144416A43426754454C0A4D416B474131554542684D4356564D78457A415242674E5642416754436B4E6862476C6D62334A7561574578466A415542674E564241635444564E68626942470A636D467559326C7A593238784754415842674E5642416F54454739795A7A45755A586868625842735A53356A623230784444414B42674E564241735441304E500A554445634D426F474131554541784D545932457562334A6E4D53356C654746746347786C4C6D4E7662544165467730784E7A45784D5449784D7A51784D5446610A467730794E7A45784D5441784D7A51784D5446614D476B78437A414A42674E5642415954416C56544D524D77455159445651514945777044595778705A6D39790A626D6C684D52597746415944565151484577315459573467526E4A68626D4E7063324E764D517777436759445651514C45774E4454314178487A416442674E560A42414D4D466C567A5A584978514739795A7A45755A586868625842735A53356A623230775754415442676371686B6A4F5051494242676771686B6A4F50514D420A42774E43414152776B7773647A664945753549554F6D6C5A6A4259644755724B566D5841713857757174676E76306375684A4C666F73697277664E38307745740A6B395A637856706C5657703732484A736E5A6A73386C75412B3232756F303077537A414F42674E56485138424166384542414D434234417744415944565230540A4151482F424149774144417242674E5648534D454A4441696743434B6335456947633851566C534665627035594753627372746C7A78486A2F507374626765690A79774F554B7A414B42676771686B6A4F5051514441674E49414442464169454176437773694B374465724A5333647A375A35562B5248644A624D654C625961660A32396234643871467A736F4349483338637A394C7A306B783856615974347453784A4B3550526F695850696A37466C6E794F6248615246330A2D2D2D2D2D454E442043455254494649434154452D2D2D2D2D";
     public static final String INVALID_PEM_CERT = "2D2D224547494E202D2D2D2D2D0A4D4949436A444343416A4B6741774942416749554245567773537830546D7164627A4E776C654E42427A6F4954307777436759494B6F5A497A6A3045417749770A667A454C4D416B474131554542684D4356564D78457A415242674E5642416754436B4E6862476C6D62334A7561574578466A415542674E564241635444564E680A62694247636D467559326C7A59323878487A416442674E5642416F54466B6C7564475679626D5630494664705A47646C64484D7349456C75597934784444414B0A42674E564241735441316458567A45554D4249474131554541784D4C5A586868625842735A53356A623230774868634E4D5459784D5445784D5463774E7A41770A5768634E4D5463784D5445784D5463774E7A4177576A426A4D517377435159445651514745774A56557A45584D4255474131554543424D4F546D3979644767670A5132467962327870626D45784544414F42674E564241635442314A68624756705A326778477A415A42674E5642416F54456B6835634756796247566B5A3256790A49455A68596E4A70597A454D4D416F474131554543784D44513039514D466B77457759484B6F5A497A6A3043415159494B6F5A497A6A304441516344516741450A4842754B73414F34336873344A4770466669474D6B422F7873494C54734F766D4E32576D77707350485A4E4C36773848576533784350517464472F584A4A765A0A2B433735364B457355424D337977355054666B7538714F42707A43427044414F42674E56485138424166384542414D4342614177485159445652306C424259770A464159494B7759424251554841774547434373474151554642774D434D41774741315564457745422F7751434D414177485159445652304F42425945464F46430A6463555A346573336C746943674156446F794C66567050494D42384741315564497751594D4261414642646E516A32716E6F492F784D55646E3176446D6447310A6E4567514D43554741315564455151654D427943436D31356147397A6443356A62323243446E6433647935746557687663335175593239744D416F47434371470A534D343942414D43413067414D4555434944663948626C34786E337A3445774E4B6D696C4D396C58324671346A5770416152564239374F6D56456579416945410A32356144505148474771324176684B54307776743038635831475447434962666D754C704D774B516A33383D0A2D2D2D2D2D454E44202D2D2D2D2D0A";
     private static final String SIGNING_ALGORITHM = "SHA256withECDSA";
+
+    private static final String PEM_PRIVATEKEY = "-----BEGIN PRIVATE KEY-----\n" +
+            "MIGHAgEAMBMGByqGSM49AgEGCCqBHM9VAYItBG0wawIBAQQghdBc2tXPfuJQQE17\n" +
+            "JUROPG/9h4+TOXLYg3jk6wmcwO2hRANCAAQdI+++EPSlnaPqsnXDT1QksFhSXRud\n" +
+            "dKiv1d2W5Zud6LdIHDVahYT5KRuz31Iy3kRT28UXmOIkaUYw+Zh3y79p\n" +
+            "-----END PRIVATE KEY-----";
+
+    private static final String PEM_CERT = "-----BEGIN CERTIFICATE-----\n" +
+            "MIIC2jCCAoCgAwIBAgIULiVxOdUImjILC0wVibaeP2NRoJ0wCgYIKoEcz1UBg3Uw\n" +
+            "eDELMAkGA1UEBhMCQ04xEDAOBgNVBAgTB0JlaUppbmcxEDAOBgNVBAcTB0hhaURp\n" +
+            "YW4xFzAVBgNVBAoTDmJmLmJpZGRpbmcuY29tMRAwDgYDVQQLEwdEZWZhdWx0MRow\n" +
+            "GAYDVQQDExFjYS5iZi5iaWRkaW5nLmNvbTAeFw0yMDA5MTEwMjQzMDBaFw0yMTA5\n" +
+            "MTEwMjQ4MDBaMHoxCzAJBgNVBAYTAkNOMRAwDgYDVQQIEwdCZWlKaW5nMRAwDgYD\n" +
+            "VQQHEwdIYWlEaWFuMRcwFQYDVQQKEw5iZi5iaWRkaW5nLmNvbTEPMA0GA1UECxMG\n" +
+            "Y2xpZW50MR0wGwYDVQQDDBRVc2VyMUBiZi5iaWRkaW5nLmNvbTBZMBMGByqGSM49\n" +
+            "AgEGCCqBHM9VAYItA0IABB0j774Q9KWdo+qydcNPVCSwWFJdG510qK/V3Zblm53o\n" +
+            "t0gcNVqFhPkpG7PfUjLeRFPbxReY4iRpRjD5mHfLv2mjgeUwgeIwDgYDVR0PAQH/\n" +
+            "BAQDAgeAMAwGA1UdEwEB/wQCMAAwHQYDVR0OBBYEFJylTyOGP8ws4yQV8ti1c/fB\n" +
+            "yo1JMB8GA1UdIwQYMBaAFO2DMH9kp46LmTXzBMMVs/GOB7O2MBkGA1UdEQQSMBCC\n" +
+            "DmJmLmJpZGRpbmcuY29tMGcGCCoDBAUGBwgBBFt7ImF0dHJzIjp7ImhmLkFmZmls\n" +
+            "aWF0aW9uIjoiIiwiaGYuRW5yb2xsbWVudElEIjoiVXNlcjFAYmYuYmlkZGluZy5j\n" +
+            "b20iLCJoZi5UeXBlIjoiY2xpZW50In19MAoGCCqBHM9VAYN1A0gAMEUCIAEMAXCc\n" +
+            "EnCzCFWkX9qY9gIG31gTNstqJ0frl62cyld/AiEA4ruS0V3ceHi48GlZkC56Uvzd\n" +
+            "Hx+XBbDDnbS8NbO9fy8=\n" +
+            "-----END CERTIFICATE-----\n";
 
     // File create_key_cert_for_testing.md has info on the other keys and
     // certificates used in this test suite
@@ -137,7 +169,7 @@ public class CryptoPrimitivesTest {
         PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(bcKeyPair.getPrivateKeyInfo().getEncoded());
         PrivateKey key = kf.generatePrivate(keySpec);
 
-        Certificate[] certificates = new Certificate[] {cert, testCACert};
+        Certificate[] certificates = new Certificate[]{cert, testCACert};
         crypto.getTrustStore().setKeyEntry("key", key, "123456".toCharArray(), certificates);
         pem.close();
     }
@@ -211,19 +243,19 @@ public class CryptoPrimitivesTest {
         }
     }
 
-    @Test (expected = InvalidArgumentException.class)
+    @Test(expected = InvalidArgumentException.class)
     public void testSecurityLevel() throws InvalidArgumentException, IllegalAccessException, InstantiationException, ClassNotFoundException {
         CryptoPrimitives testCrypto = new CryptoPrimitives();
         testCrypto.setSecurityLevel(2001);
     }
 
-    @Test (expected = InvalidArgumentException.class)
+    @Test(expected = InvalidArgumentException.class)
     public void testSetHashAlgorithm() throws InvalidArgumentException, IllegalAccessException, InstantiationException, ClassNotFoundException {
         CryptoPrimitives testCrypto = new CryptoPrimitives();
         testCrypto.setHashAlgorithm(null);
     }
 
-    @Test (expected = InvalidArgumentException.class)
+    @Test(expected = InvalidArgumentException.class)
     public void testSetHashAlgorithmBadArg() throws InvalidArgumentException, IllegalAccessException, InstantiationException, ClassNotFoundException {
         CryptoPrimitives testCrypto = new CryptoPrimitives();
         testCrypto.setHashAlgorithm("FAKE");
@@ -306,7 +338,7 @@ public class CryptoPrimitivesTest {
         }
     }
 
-    @Test (expected = InvalidArgumentException.class)
+    @Test(expected = InvalidArgumentException.class)
     public void testAddCACertificateToTrustStoreNullAlias() throws InvalidArgumentException {
         try {
             crypto.addCACertificateToTrustStore(new File("something"), null);
@@ -315,7 +347,7 @@ public class CryptoPrimitivesTest {
         }
     }
 
-    @Test (expected = InvalidArgumentException.class)
+    @Test(expected = InvalidArgumentException.class)
     public void testAddCACertificateToTrustStoreBlankAlias() throws InvalidArgumentException {
         try {
             crypto.addCACertificateToTrustStore(new File("something"), "");
@@ -324,7 +356,7 @@ public class CryptoPrimitivesTest {
         }
     }
 
-    @Test (expected = InvalidArgumentException.class)
+    @Test(expected = InvalidArgumentException.class)
     public void testAddCACertificateToTrustStoreEmptyAlias() throws InvalidArgumentException {
         try {
             crypto.addCACertificateToTrustStore(new File("something"), "");
@@ -353,7 +385,7 @@ public class CryptoPrimitivesTest {
         }
     }
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testAddCACertificateToTrustStoreNoFile() throws CryptoException {
         try {
             crypto.addCACertificateToTrustStore(new File("does/not/exist"), "abc");
@@ -362,7 +394,7 @@ public class CryptoPrimitivesTest {
         }
     }
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testAddCACertificateToTrustStoreInvalidCertFile() throws CryptoException {
         try {
             crypto.addCACertificateToTrustStore(new File("/bad-ca1.crt"), "abc");
@@ -371,7 +403,7 @@ public class CryptoPrimitivesTest {
         }
     }
 
-    @Test (expected = InvalidArgumentException.class)
+    @Test(expected = InvalidArgumentException.class)
     public void testAddCACertificateToTrustStoreNoCert() throws InvalidArgumentException {
         try {
             crypto.addCACertificateToTrustStore((Certificate) null, "abc");
@@ -400,17 +432,17 @@ public class CryptoPrimitivesTest {
         crypto.addCACertificateToTrustStore(testCACert, "");
     }
 
-    @Test (expected = InvalidArgumentException.class)
+    @Test(expected = InvalidArgumentException.class)
     public void testAddCACertificateToTrustStoreNullFile() throws Exception {
         crypto.addCACertificateToTrustStore((File) null, "test");
     }
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testLoadCACertsBadInput() throws CryptoException {
         crypto.loadCACertificates(null);
     }
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testLoadCACertsBytesBadInput() throws CryptoException {
         crypto.loadCACertificatesAsBytes(null);
     }
@@ -447,22 +479,22 @@ public class CryptoPrimitivesTest {
         }
     }
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testBytesToCertificateInvalidBytes() throws CryptoException {
         crypto.bytesToCertificate(INVALID_PEM_CERT.getBytes());
     }
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testBytesToCertificateNullBytes() throws CryptoException {
         crypto.bytesToCertificate(null);
     }
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testBytesToPrivateKeyInvalidBytes() throws CryptoException {
         crypto.bytesToPrivateKey(INVALID_PEM_CERT.getBytes());
     }
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testBytesToPrivateKeyNullBytes() throws CryptoException {
         crypto.bytesToPrivateKey(null);
     }
@@ -525,21 +557,21 @@ public class CryptoPrimitivesTest {
         }
     } // testVerifyNullInput
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testVerifyBadCert() throws CryptoException {
-        byte[] badCert = new byte[] {(byte) 0x00};
+        byte[] badCert = new byte[]{(byte) 0x00};
         crypto.verify(badCert, SIGNING_ALGORITHM, sig, plainText);
     } // testVerifyBadCert
 
-    @Test (expected = CryptoException.class)
+    @Test(expected = CryptoException.class)
     public void testVerifyBadSig() throws CryptoException {
-        byte[] badSig = new byte[] {(byte) 0x00};
+        byte[] badSig = new byte[]{(byte) 0x00};
         crypto.verify(pemCert, SIGNING_ALGORITHM, badSig, plainText);
     } // testVerifyBadSign
 
     @Test
     public void testVerifyBadPlaintext() {
-        byte[] badPlainText = new byte[] {(byte) 0x00};
+        byte[] badPlainText = new byte[]{(byte) 0x00};
         try {
             assertFalse(crypto.verify(pemCert, SIGNING_ALGORITHM, sig, badPlainText));
         } catch (CryptoException e) {
@@ -559,7 +591,7 @@ public class CryptoPrimitivesTest {
     @Test
     public void testSignNullKey() {
         try {
-            crypto.sign(null, new byte[] {(byte) 0x00});
+            crypto.sign(null, new byte[]{(byte) 0x00});
             Assert.fail("sign() should have thrown an exception");
         } catch (CryptoException e) {
         }
@@ -613,6 +645,111 @@ public class CryptoPrimitivesTest {
     public void testKeyGen() throws CryptoException {
         Assert.assertNotNull(crypto.keyGen());
         Assert.assertSame(KeyPair.class, crypto.keyGen().getClass());
+    }
+
+    @Test
+    public void testSM2KeyGen() {
+
+        CryptoSuite cs;
+        String hashAlgo = "SM3";
+        try {
+            if (hashAlgo.equals("SM3")) {
+                Properties properties = new Properties();
+                properties.setProperty(Config.SECURITY_LEVEL, "256");
+                properties.setProperty(Config.HASH_ALGORITHM, hashAlgo);
+
+                cs = CryptoSuite.Factory.getCryptoSuite(properties);
+
+            } else {
+                cs = CryptoSuite.Factory.getCryptoSuite();
+            }
+
+            KeyPair kp = cs.keyGen();
+            PrivateKey priv = kp.getPrivate();
+            System.out.println(priv.getFormat());
+            System.out.println(kp.getPublic().getFormat());
+
+            BCECPrivateKey bcecPrivateKey = (BCECPrivateKey) priv;
+            BCECPublicKey bcecPublicKey = (BCECPublicKey) kp.getPublic();
+
+            System.out.println("D: " + bcecPrivateKey.getD().toString(10));
+            System.out.println("X: " + bcecPublicKey.getW().getAffineX().toString(10));
+            System.out.println("Y: " + bcecPublicKey.getW().getAffineY().toString(10));
+
+        } catch (Exception e) {
+            fail("Could not generate sm2 key. Error: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testSM2Sign() {
+
+        CryptoSuite cs;
+        String hashAlgo = "SM3";
+        try {
+            if (hashAlgo.equals("SM3")) {
+                Properties properties = new Properties();
+                properties.setProperty(Config.SECURITY_LEVEL, "256");
+                properties.setProperty(Config.HASH_ALGORITHM, hashAlgo);
+
+                cs = CryptoSuite.Factory.getCryptoSuite(properties);
+
+            } else {
+                cs = CryptoSuite.Factory.getCryptoSuite();
+            }
+
+            byte[] plainText = "sm2 message".getBytes(UTF_8);
+            byte[] signature;
+
+            PrivateKey key = cs.bytesToPrivateKey(PEM_PRIVATEKEY.getBytes("UTF-8"));
+            byte[] certBytes = PEM_CERT.getBytes("UTF-8");
+            Certificate cert = cs.bytesToCertificate(certBytes);
+
+            BCECPrivateKey bcecPrivateKey = (BCECPrivateKey) key;
+            BCECPublicKey bcecPublicKey = (BCECPublicKey) cert.getPublicKey();
+            System.out.println("D: " + bcecPrivateKey.getD().toString(10));
+            System.out.println("X: " + bcecPublicKey.getW().getAffineX().toString(10));
+            System.out.println("Y: " + bcecPublicKey.getW().getAffineY().toString(10));
+
+
+            signature = cs.sign(key, plainText);
+            System.out.println(Hex.toHexString(signature));
+
+            assertTrue(((CryptoPrimitives) cs).verify(cert.getPublicKey(), signature, plainText));
+        } catch (Exception e) {
+            fail("Could not verify signature. Error: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testBytesToCertificate() {
+
+        CryptoPrimitives cp;
+        try {
+            cp = new CryptoPrimitives();
+
+            byte[] pemBytes = PEM_CERT.getBytes("UTF-8");
+            X500Name x500name = new JcaX509CertificateHolder(
+                    (X509Certificate) cp.bytesToCertificate(pemBytes)).getSubject();
+            RDN rdn = x500name.getRDNs(BCStyle.CN)[0];
+            String cn = IETFUtils.valueToString(rdn.getFirst().getValue());
+            System.out.println(cn);
+        } catch (Exception e) {
+            fail("Could not convert pem cert to Certificate. Error: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testBytesToPrivateKey2() {
+
+        CryptoPrimitives cp;
+        try {
+            cp = new CryptoPrimitives();
+            PrivateKey key = cp.bytesToPrivateKey(PEM_PRIVATEKEY.getBytes("UTF-8"));
+            System.out.println(key.getAlgorithm());
+        } catch (Exception e) {
+            fail("Could not convert pem private to PrivateKey. Error: " + e.getMessage());
+        }
     }
 
     // Try to generate a key without initializing crypto
